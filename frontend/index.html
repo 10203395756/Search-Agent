@@ -1,0 +1,374 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>研查Agent - 个人调研工具</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        }
+        :root {
+            --primary: #2563eb;
+            --gray: #64748b;
+            --light: #f1f5f9;
+            --success: #10b981;
+            --warn: #f97316;
+            --white: #ffffff;
+        }
+        body {
+            background-color: #f8fafc;
+            color: #1e293b;
+            line-height: 1.6;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 16px;
+        }
+        header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+        }
+        .logo {
+            font-size: 22px;
+            font-weight: bold;
+            color: var(--primary);
+        }
+        .card {
+            background: var(--white);
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.06);
+            padding: 20px;
+            margin-bottom: 16px;
+        }
+        .btn {
+            padding: 10px 18px;
+            border-radius: 8px;
+            border: none;
+            cursor: pointer;
+            font-size: 15px;
+        }
+        .btn-primary {
+            background: var(--primary);
+            color: white;
+        }
+        .btn-outline {
+            background: transparent;
+            border: 1px solid var(--primary);
+            color: var(--primary);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        textarea, select {
+            width: 100%;
+            border: 1px solid #cbd5e1;
+            border-radius: 8px;
+            padding: 12px;
+            font-size: 15px;
+            outline: none;
+        }
+        textarea:focus, select:focus {
+            border-color: var(--primary);
+        }
+        .form-row {
+            margin: 12px 0;
+        }
+        .form-label {
+            display: block;
+            margin-bottom: 6px;
+            font-weight: 500;
+        }
+        .collapse-header {
+            cursor: pointer;
+            color: var(--gray);
+            user-select: none;
+        }
+        .collapse-content {
+            margin-top:10px;
+            display: none;
+        }
+        .collapse-content.show {
+            display:block;
+        }
+        .status-card {
+            border-left:4px solid var(--primary);
+        }
+        .status-item {
+            display: flex;
+            align-items: center;
+            gap:8px;
+            margin:6px 0;
+        }
+        .status-dot {
+            width:10px;height:10px;
+            border-radius:50%;
+            background:#ccc;
+        }
+        .status-dot.active {
+            background: var(--primary);
+            animation: breathe 1.5s infinite;
+        }
+        .status-dot.done {
+            background: var(--success);
+        }
+        @keyframes breathe {
+            0% {opacity:0.4}
+            50% {opacity:1}
+            100% {opacity:0.4}
+        }
+        .report-box {
+            min-height: 220px;
+            white-space: pre-wrap;
+            overflow-x:auto;
+        }
+        .action-bar {
+            display:flex;
+            gap:10px;
+            flex-wrap:wrap;
+            margin:12px 0;
+        }
+        .append-area {
+            margin-top:16px;
+        }
+        .tip {
+            color: var(--gray);
+            font-size:13px;
+            margin-top:4px;
+        }
+        .error {
+            color:#ef4444;
+        }
+        .hidden {
+            display:none;
+        }
+    </style>
+</head>
+<body>
+<div class="container">
+    <header>
+        <div class="logo">研查Agent</div>
+        <div>
+            <span class="tip">SSE流式对接后端</span>
+        </div>
+    </header>
+
+    <!-- 新建调研表单 -->
+    <div class="card" id="formCard">
+        <h3>新建调研任务</h3>
+        <div class="form-row">
+            <label class="form-label">调研需求</label>
+            <textarea id="queryInput" rows="4" placeholder="例如：调研2026小红书本地生活博主变现方式、避坑点和爆款选题"></textarea>
+            <div class="tip">尽量写清楚主题、时间范围、输出格式、是否需要过滤广告</div>
+        </div>
+        <div class="collapse-header" id="toggleAdv">▼ 高级选项</div>
+        <div class="collapse-content" id="advPanel">
+            <div class="form-row">
+                <label class="form-label">输出格式</label>
+                <select id="fmtSelect">
+                    <option value="要点清单">要点清单</option>
+                    <option value="对比表格">对比表格</option>
+                    <option value="完整调研报告">完整调研报告</option>
+                </select>
+            </div>
+            <div class="form-row">
+                <label class="form-label">过滤营销软文</label>
+                <select id="adFilter">
+                    <option value="true">开启过滤（推荐）</option>
+                    <option value="false">不开启</option>
+                </select>
+            </div>
+        </div>
+        <div class="form-row">
+            <button class="btn btn-primary" id="startBtn">开始调研</button>
+        </div>
+    </div>
+
+    <!-- 进度看板 -->
+    <div class="card status-card hidden" id="statusCard">
+        <h3>任务状态</h3>
+        <div id="statusList">
+            <div class="status-item">
+                <span class="status-dot" data-step="planner"></span>
+                <span>拆解调研目标</span>
+            </div>
+            <div class="status-item">
+                <span class="status-dot" data-step="search"></span>
+                <span>搜索相关网页</span>
+            </div>
+            <div class="status-item">
+                <span class="status-dot" data-step="reader"></span>
+                <span>精读网页提取内容</span>
+            </div>
+            <div class="status-item">
+                <span class="status-dot" data-step="reviewer"></span>
+                <span>校验信息、补充检索</span>
+            </div>
+            <div class="status-item">
+                <span class="status-dot" data-step="writer"></span>
+                <span>生成报告</span>
+            </div>
+        </div>
+        <div id="statusMsg" style="margin-top:10px;"></div>
+    </div>
+
+    <!-- 报告区域 -->
+    <div class="card hidden" id="reportCard">
+        <h3>调研报告</h3>
+        <div class="report-box" id="reportBox"></div>
+        <div class="action-bar">
+            <button class="btn btn-outline" id="copyBtn">复制全文</button>
+            <button class="btn btn-outline" id="mdBtn">导出 Markdown</button>
+            <button class="btn btn-outline" id="pdfBtn">导出PDF（会员）</button>
+        </div>
+        <!-- 追加指令输入框 -->
+        <div class="append-area">
+            <label class="form-label">追加指令（深挖 / 修改 / 精简）</label>
+            <textarea id="appendInput" rows="2" placeholder="例：深挖变现渠道部分，增加案例；删掉广告内容；精简到300字"></textarea>
+            <div class="form-row" style="margin-top:8px;">
+                <button class="btn btn-primary" id="appendBtn">提交追加指令</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+// 后端地址
+const BASE_URL = "http://127.0.0.1:8000";
+let taskId = null;
+let source = null;
+let reportText = "";
+
+// 折叠高级选项
+const toggleAdv = document.getElementById("toggleAdv");
+const advPanel = document.getElementById("advPanel");
+toggleAdv.onclick = () => {
+    advPanel.classList.toggle("show");
+    toggleAdv.textContent = advPanel.classList.contains("show") ? "▲ 高级选项" : "▼ 高级选项";
+}
+
+// 步骤映射
+const stepMap = {
+    "✅ 拆解调研目标": "planner",
+    "🔍 正在搜索相关网页": "search",
+    "📖 正在精读网页提取内容": "reader",
+    "🧐 信息不足，补充检索": "reviewer",
+    "✅ 信息收集完成，开始撰写报告": "writer"
+}
+
+function clearStepStatus(){
+    document.querySelectorAll(".status-dot").forEach(dot=>{
+        dot.classList.remove("active","done");
+    })
+}
+function setStepActive(stepName){
+    clearStepStatus();
+    const dot = document.querySelector(`.status-dot[data-step="${stepName}"]`);
+    if(dot) dot.classList.add("active");
+}
+function markStepDone(stepName){
+    const dot = document.querySelector(`.status-dot[data-step="${stepName}"]`);
+    if(dot) dot.classList.remove("active"), dot.classList.add("done");
+}
+
+// 新建调研
+document.getElementById("startBtn").onclick = async ()=>{
+    const q = document.getElementById("queryInput").value.trim();
+    const fmt = document.getElementById("fmtSelect").value;
+    const filterAd = document.getElementById("adFilter").value;
+    if(!q){
+        alert("请输入调研需求");
+        return;
+    }
+    // uuid简易生成
+    taskId = "task_" + Date.now() + "_" + Math.random().toString(36).slice(2);
+    reportText = "";
+    document.getElementById("reportBox").innerText = "";
+    document.getElementById("statusCard").classList.remove("hidden");
+    document.getElementById("reportCard").classList.add("hidden");
+    document.getElementById("startBtn").disabled = true;
+    clearStepStatus();
+
+    const url = `${BASE_URL}/api/research/new?q=${encodeURIComponent(q)}&fmt=${encodeURIComponent(fmt)}&filter_ad=${filterAd}&task_id=${taskId}`;
+    startSSE(url);
+}
+
+// 追加指令
+document.getElementById("appendBtn").onclick = ()=>{
+    const msg = document.getElementById("appendInput").value.trim();
+    if(!taskId || !msg) return;
+    document.getElementById("appendBtn").disabled = true;
+    const url = `${BASE_URL}/api/research/append?task_id=${taskId}&msg=${encodeURIComponent(msg)}`;
+    startSSE(url);
+}
+
+function startSSE(url){
+    if(source) source.close();
+    source = new EventSource(url);
+    source.onmessage = (e)=>{
+        const data = JSON.parse(e.data);
+        if(data.type === "status"){
+            document.getElementById("statusMsg").innerText = data.msg;
+            const step = stepMap[data.msg];
+            if(step) setStepActive(step);
+            // 标记上一步完成
+            if(data.msg === "✅ 信息收集完成，开始撰写报告"){
+                markStepDone("planner");
+                markStepDone("search");
+                markStepDone("reader");
+                markStepDone("reviewer");
+            }
+        }
+        if(data.type === "report"){
+            reportText = data.content;
+            document.getElementById("reportBox").innerText = reportText;
+            document.getElementById("reportCard").classList.remove("hidden");
+        }
+        if(data.type === "done"){
+            source.close();
+            document.getElementById("startBtn").disabled = false;
+            document.getElementById("appendBtn").disabled = false;
+            markStepDone("writer");
+        }
+        if(data.type === "error"){
+            alert(data.msg);
+            source.close();
+            document.getElementById("startBtn").disabled = false;
+            document.getElementById("appendBtn").disabled = false;
+        }
+    }
+    source.onerror = (err)=>{
+        console.error("SSE异常",err);
+        alert("连接断开");
+        source.close();
+        document.getElementById("startBtn").disabled = false;
+        document.getElementById("appendBtn").disabled = false;
+    }
+}
+
+// 复制
+document.getElementById("copyBtn").onclick = async ()=>{
+    await navigator.clipboard.writeText(reportText);
+    alert("已复制");
+}
+// 导出md
+document.getElementById("mdBtn").onclick = ()=>{
+    const blob = new Blob([reportText], {type:"text/markdown"});
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "调研报告.md";
+    a.click();
+}
+document.getElementById("pdfBtn").onclick = ()=>{
+    alert("PDF导出为会员功能，后端后续实现");
+}
+</script>
+</body>
+</html>
